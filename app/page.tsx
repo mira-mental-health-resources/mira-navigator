@@ -67,7 +67,7 @@ export default function Home() {
 
   // Fetch from Google Sheets on load
   useEffect(() => {
-    const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vShuHSqQnS_iI89rqyPv2AZA3jhqeJsblUTpF4XzRkggMDuanUPUV94dUHc4aOfyA/pub?gid=994549344&single=true&output=csv";
+    const csvUrl = "/directory.csv";
     
     Papa.parse(csvUrl, {
       download: true,
