@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, Component, ReactNode } from 'react';
+import React, { useState, useEffect, Component, ReactNode } from 'react';
 import dynamic from 'next/dynamic';
+import Papa from 'papaparse';
 
 const MapComponent = dynamic(() => import('./components/Map'), { 
   ssr: false, 
@@ -14,45 +15,6 @@ interface Resource {
   services: string[]; languages: string[]; massHealth: string;
   medicare: string; commercial: string; undocumented: string; telehealth: string;
 }
-
-const realData: Resource[] = [
-  {
-    id: "0", name: "Boston Medical Center", address: "85 East Newton St, 1st Floor, Boston, MA 02118",
-    lat: 42.336, lng: -71.074, services: ["Individual Therapy", "Group Therapy", "Mobile Crisis"],
-    languages: ["Multiple (Interpreter services)"], massHealth: "Yes", medicare: "Unknown", commercial: "Yes", undocumented: "Unknown", telehealth: "Yes",
-    phone: "617-414-5470", website: "https://www.bmc.org/psychiatry"
-  },
-  {
-    id: "1", name: "North Suffolk Community Services", address: "14 Porter St, East Boston, MA 02128",
-    lat: 42.370, lng: -71.039, services: ["Medication-Assisted Treatment (MAT)", "Intensive Outpatient", "Peer Support"],
-    languages: ["Spanish", "Vietnamese", "Cambodian/Khmer"], massHealth: "Yes", medicare: "Yes", commercial: "Yes", undocumented: "Unknown", telehealth: "Yes",
-    phone: "617-569-3189", website: "https://northsuffolk.org"
-  },
-  {
-    id: "2", name: "North Suffolk Community Services", address: "265 Beach Street, Revere, MA 02151",
-    lat: 42.408, lng: -70.995, services: ["Individual Therapy", "Group Therapy", "Psychiatric Medication Management"],
-    languages: ["Cambodian/Khmer"], massHealth: "Yes", medicare: "Yes", commercial: "Yes", undocumented: "Unknown", telehealth: "Yes",
-    phone: "781-289-8200", website: "https://northsuffolk.org"
-  },
-  {
-    id: "3", name: "Boston Medical Center (Crosstown)", address: "771 Albany St, Boston, MA 02118",
-    lat: 42.334, lng: -71.071, services: ["Case Management", "Psychological Testing"],
-    languages: ["250+ languages via interpreter"], massHealth: "Yes", medicare: "Unknown", commercial: "Unknown", undocumented: "Yes", telehealth: "Yes",
-    phone: "617-414-5470", website: "https://www.bmc.org"
-  },
-  {
-    id: "4", name: "Northeast Health Services (NEHS)", address: "1 Union St, 3rd Floor, Boston, MA 02180",
-    lat: 42.361, lng: -71.056, services: ["Individual Therapy", "Same/next-day evaluation"],
-    languages: ["Unknown"], massHealth: "Yes", medicare: "Unknown", commercial: "Unknown", undocumented: "Unknown", telehealth: "Yes",
-    phone: "888-294-0094", website: "https://northeasthealthservices.com"
-  },
-  {
-    id: "5", name: "Northeast Health Services (NEHS)", address: "90 Everett Avenue, Suite 12, Chelsea, MA 02150",
-    lat: 42.394, lng: -71.040, services: ["Individual Therapy", "Psychiatric Medication Management"],
-    languages: ["Unknown"], massHealth: "Yes", medicare: "Unknown", commercial: "Unknown", undocumented: "Unknown", telehealth: "Yes",
-    phone: "888-294-0094", website: "https://northeasthealthservices.com"
-  }
-];
 
 const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
   const R = 3958.8;
@@ -81,8 +43,8 @@ const Icons = {
 };
 
 const StatusIndicator = ({ status, label }: { status: string; label: string }) => {
-  if (status === 'Yes') return <div className="flex items-center"><Icons.Check /><span className="ml-2 text-sm">{label}</span></div>;
-  if (status === 'No') return <div className="flex items-center line-through text-gray-500"><Icons.Cross /><span className="ml-2 text-sm">{label}</span></div>;
+  if (status === 'Yes' || status === 'y' || status === 'yes') return <div className="flex items-center"><Icons.Check /><span className="ml-2 text-sm">{label}</span></div>;
+  if (status === 'No' || status === 'n' || status === 'no') return <div className="flex items-center line-through text-gray-500"><Icons.Cross /><span className="ml-2 text-sm">{label}</span></div>;
   return (
     <div className="flex items-start bg-blue-50/50 p-2 rounded-md">
       <div className="mt-0.5"><Icons.Help /></div>
@@ -92,14 +54,55 @@ const StatusIndicator = ({ status, label }: { status: string; label: string }) =
 };
 
 export default function Home() {
+  const [realData, setRealData] = useState<Resource[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [activeId, setActiveId] = useState<string | null>(null);
+  
   const [language, setLanguage] = useState('');
   const [insurance, setInsurance] = useState('');
-  
   const [zipInput, setZipInput] = useState('');
   const [radius, setRadius] = useState('5');
   const [searchCenter, setSearchCenter] = useState<[number, number]>([42.3601, -71.0589]);
   const [isSearching, setIsSearching] = useState(false);
+
+  // Fetch from Google Sheets on load
+  useEffect(() => {
+    const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vShuHSqQnS_iI89rqyPv2AZA3jhqeJsblUTpF4XzRkggMDuanUPUV94dUHc4aOfyA/pub?gid=994549344&single=true&output=csv";
+    
+    Papa.parse(csvUrl, {
+      download: true,
+      header: true,
+      complete: (results) => {
+        const parsedData = results.data
+          .filter((row: any) => row.Org_Name) 
+          .map((row: any, idx: number) => {
+            const hasLat = row.Latitude && row.Latitude.trim() !== "";
+            // Temporarily scatter pins slightly around central Mass if missing coordinates
+            const scatterLat = 42.36 + (Math.random() * 0.4 - 0.2);
+            const scatterLng = -71.06 + (Math.random() * 0.4 - 0.2);
+
+            return {
+              id: idx.toString(),
+              name: row.Org_Name || "Unknown Organization",
+              address: `${row.Main_Address_Line1 || ''}, ${row.City_Town || ''}, MA ${row.ZIP || ''}`,
+              lat: hasLat ? parseFloat(row.Latitude) : scatterLat,
+              lng: hasLat ? parseFloat(row.Longitude) : scatterLng,
+              phone: row.Main_Phone,
+              website: row.Website,
+              services: row.Service_Modalities ? row.Service_Modalities.split(';') : [],
+              languages: row.Languages_Spoken_By_Staff_Other_Than_English ? row.Languages_Spoken_By_Staff_Other_Than_English.split(';') : [],
+              massHealth: row.Accepts_MassHealth || "Unknown",
+              medicare: row.Accepts_Medicare || "Unknown",
+              commercial: row.Accepts_Commercial_Insurance || "Unknown",
+              undocumented: row.Serves_Regardless_of_Immigration_Status || "Unknown",
+              telehealth: row.Telehealth_Available || "Unknown"
+            };
+          });
+        setRealData(parsedData);
+        setIsLoading(false);
+      }
+    });
+  }, []);
 
   const handleZipSearch = async () => {
     if (!zipInput || zipInput.length < 5) return;
@@ -119,16 +122,20 @@ export default function Home() {
   };
 
   const filteredData = realData.filter(res => {
-    if (language && !res.languages.some(l => l.includes(language) || l.includes('Multiple'))) return false;
-    if (insurance === 'MassHealth' && res.massHealth === 'No') return false;
-    if (insurance === 'Medicare' && res.medicare === 'No') return false;
-    if (insurance === 'Commercial' && res.commercial === 'No') return false;
+    if (language && !res.languages.some(l => l.toLowerCase().includes(language.toLowerCase()) || l.toLowerCase().includes('multiple'))) return false;
+    if (insurance === 'MassHealth' && (res.massHealth === 'No' || res.massHealth === 'n' || res.massHealth === 'no')) return false;
+    if (insurance === 'Medicare' && (res.medicare === 'No' || res.medicare === 'n' || res.medicare === 'no')) return false;
+    if (insurance === 'Commercial' && (res.commercial === 'No' || res.commercial === 'n' || res.commercial === 'no')) return false;
     if (zipInput.length >= 5) {
       const distance = getDistance(searchCenter[0], searchCenter[1], res.lat, res.lng);
       if (distance > parseInt(radius)) return false;
     }
     return true;
   });
+
+  if (isLoading) {
+    return <div className="min-h-screen flex items-center justify-center bg-slate-50 font-sans"><p className="text-xl font-bold text-[#1E396C] animate-pulse">Loading Live Directory Data...</p></div>;
+  }
 
   return (
     <ErrorBoundary>
@@ -193,6 +200,8 @@ export default function Home() {
                   <select value={language} onChange={(e) => setLanguage(e.target.value)} className="w-full border-gray-300 rounded-md p-2 bg-slate-50 border focus:ring-2 focus:ring-[#1E396C]">
                     <option value="">Any Language</option>
                     <option value="Spanish">Spanish</option>
+                    <option value="Portuguese">Portuguese</option>
+                    <option value="Haitian Creole">Haitian Creole</option>
                     <option value="Vietnamese">Vietnamese</option>
                     <option value="Cambodian">Cambodian / Khmer</option>
                   </select>
@@ -227,7 +236,7 @@ export default function Home() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                  {filteredData.map(res => (
+                  {filteredData.slice(0, 100).map(res => (
                     <div 
                       key={res.id} 
                       onClick={() => setActiveId(res.id)}
@@ -251,17 +260,19 @@ export default function Home() {
                         {res.website && (
                           <a href={res.website} target="_blank" rel="noopener noreferrer" className="flex items-center text-sm text-blue-600 hover:underline hover:text-blue-800">
                             <Icons.Globe />
-                            <span>Visit Website</span>
+                            <span className="truncate">Visit Website</span>
                           </a>
                         )}
                       </div>
                       
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        {res.services.slice(0, 3).map(s => <span key={s} className="px-2 py-1 bg-gray-100 text-xs font-semibold text-slate-700 rounded">{s}</span>)}
-                      </div>
+                      {res.services.length > 0 && (
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          {res.services.slice(0, 3).map((s, i) => <span key={i} className="px-2 py-1 bg-gray-100 text-xs font-semibold text-slate-700 rounded">{s}</span>)}
+                        </div>
+                      )}
                       
                       <div className="mt-4 space-y-2 pt-3 border-t border-gray-100">
-                        <p className="text-sm"><strong>Languages:</strong> {res.languages.join(', ')}</p>
+                        {res.languages.length > 0 && <p className="text-sm"><strong>Languages:</strong> {res.languages.join(', ')}</p>}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                           <StatusIndicator status={res.massHealth} label="MassHealth" />
                           <StatusIndicator status={res.undocumented} label="Undocumented Eligible" />
