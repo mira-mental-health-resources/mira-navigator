@@ -6,7 +6,6 @@ import 'leaflet/dist/leaflet.css';
 import 'leaflet-defaulticon-compatibility';
 import 'leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility.css';
 
-// Automatically recenters the map when the user searches a new ZIP
 const ChangeView = ({ center }: { center: [number, number] }) => {
   const map = useMap();
   useEffect(() => {
@@ -15,17 +14,32 @@ const ChangeView = ({ center }: { center: [number, number] }) => {
   return null;
 };
 
-export default function Map({ resources, activeId, setActiveId, center }: any) {
+interface Resource {
+  id: string;
+  name: string;
+  address: string;
+  lat: number;
+  lng: number;
+}
+
+interface MapProps {
+  resources: Resource[];
+  activeId: string | null;
+  setActiveId: (id: string | null) => void;
+  center: [number, number];
+}
+
+export default function Map({ resources, activeId, setActiveId, center }: MapProps) {
   return (
     <div className="w-full h-[400px] rounded-lg border-2 border-slate-300 overflow-hidden relative z-0">
       <MapContainer center={center} zoom={12} style={{ height: '100%', width: '100%' }}>
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <ChangeView center={center} />
         
-        {resources.map((res: any) => (
+        {resources.map((res) => (
           <Marker 
             key={res.id} 
             position={[res.lat, res.lng]}
