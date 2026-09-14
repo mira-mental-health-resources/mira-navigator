@@ -1,220 +1,139 @@
 "use client";
 
 import React, { useState, Component, ErrorInfo, ReactNode } from 'react';
+import dynamic from 'next/dynamic';
 
-// --- TYPES ---
+// Dynamically import the map to prevent Server-Side Rendering errors
+const MapComponent = dynamic(() => import('./components/Map'), { 
+  ssr: false, 
+  loading: () => <div className="bg-slate-200 w-full h-[400px] rounded-lg flex items-center justify-center font-medium text-slate-500">Loading Map...</div> 
+});
+
 interface Resource {
-  id: string;
-  name: string;
-  address: string;
-  lat: number;
-  lng: number;
-  services: string[];
-  languages: string[];
-  massHealth: string;
-  medicare: string;
-  commercial: string;
-  undocumented: string;
-  telehealth: string;
+  id: string; name: string; address: string; lat: number; lng: number;
+  services: string[]; languages: string[]; massHealth: string;
+  medicare: string; commercial: string; undocumented: string; telehealth: string;
 }
 
-// --- MOCK DATA ---
-const mockData: Resource[] = [
+// Data extracted directly from Mental Health Project MIRA.xlsx
+const realData: Resource[] = [
   {
-    id: '1',
-    name: 'Community Care Center',
-    address: '123 Main St, Boston, MA 02118',
-    lat: 42.336,
-    lng: -71.074,
-    services: ['Therapy', 'Psychiatry'],
-    languages: ['Spanish', 'English'],
-    massHealth: 'Yes',
-    medicare: 'Yes',
-    commercial: 'Yes',
-    undocumented: 'Yes',
-    telehealth: 'Yes',
+    id: "0", name: "Boston Medical Center", address: "85 East Newton St, 1st Floor, Boston, MA 02118",
+    lat: 42.336, lng: -71.074, services: ["Individual Therapy", "Group Therapy", "Mobile Crisis"],
+    languages: ["Multiple (Interpreter services)"], massHealth: "Yes", medicare: "Unknown", commercial: "Yes", undocumented: "Unknown", telehealth: "Yes"
   },
   {
-    id: '2',
-    name: 'Downtown Behavioral Health',
-    address: '450 Washington St, Boston, MA 02111',
-    lat: 42.353,
-    lng: -71.061,
-    services: ['Therapy', 'Support Groups'],
-    languages: ['English', 'Mandarin'],
-    massHealth: 'Yes',
-    medicare: 'Unknown',
-    commercial: 'No',
-    undocumented: 'Unknown',
-    telehealth: 'Yes',
+    id: "1", name: "North Suffolk Community Services", address: "14 Porter St, East Boston, MA 02128",
+    lat: 42.370, lng: -71.039, services: ["Medication-Assisted Treatment (MAT)", "Intensive Outpatient", "Peer Support"],
+    languages: ["Spanish", "Vietnamese", "Cambodian/Khmer"], massHealth: "Yes", medicare: "Yes", commercial: "Yes", undocumented: "Unknown", telehealth: "Yes"
   },
   {
-    id: '3',
-    name: 'East Side Clinic',
-    address: '88 Border St, East Boston, MA 02128',
-    lat: 42.370,
-    lng: -71.039,
-    services: ['Case Management', 'Psychiatry'],
-    languages: ['Spanish', 'Portuguese'],
-    massHealth: 'Yes',
-    medicare: 'Yes',
-    commercial: 'Unknown',
-    undocumented: 'Yes',
-    telehealth: 'No',
+    id: "2", name: "North Suffolk Community Services", address: "265 Beach Street, Revere, MA 02151",
+    lat: 42.408, lng: -70.995, services: ["Individual Therapy", "Group Therapy", "Psychiatric Medication Management"],
+    languages: ["Cambodian/Khmer"], massHealth: "Yes", medicare: "Yes", commercial: "Yes", undocumented: "Unknown", telehealth: "Yes"
   },
   {
-    id: '4',
-    name: 'Statewide Tele-Therapy',
-    address: 'Virtual Only',
-    lat: 42.360,
-    lng: -71.058,
-    services: ['Therapy', 'Crisis Care'],
-    languages: ['English', 'Haitian Creole'],
-    massHealth: 'Yes',
-    medicare: 'No',
-    commercial: 'No',
-    undocumented: 'No',
-    telehealth: 'Unknown',
+    id: "3", name: "Boston Medical Center (Crosstown)", address: "771 Albany St, Boston, MA 02118",
+    lat: 42.334, lng: -71.071, services: ["Case Management", "Psychological Testing"],
+    languages: ["250+ languages via interpreter"], massHealth: "Yes", medicare: "Unknown", commercial: "Unknown", undocumented: "Yes", telehealth: "Yes"
+  },
+  {
+    id: "4", name: "Northeast Health Services (NEHS)", address: "1 Union St, 3rd Floor, Boston, MA 02180",
+    lat: 42.361, lng: -71.056, services: ["Individual Therapy", "Same/next-day evaluation"],
+    languages: ["Unknown"], massHealth: "Yes", medicare: "Unknown", commercial: "Unknown", undocumented: "Unknown", telehealth: "Yes"
+  },
+  {
+    id: "5", name: "Northeast Health Services (NEHS)", address: "90 Everett Avenue, Suite 12, Chelsea, MA 02150",
+    lat: 42.394, lng: -71.040, services: ["Individual Therapy", "Psychiatric Medication Management"],
+    languages: ["Unknown"], massHealth: "Yes", medicare: "Unknown", commercial: "Unknown", undocumented: "Unknown", telehealth: "Yes"
   }
 ];
 
-// --- ERROR BOUNDARY ---
-interface ErrorBoundaryProps { children: ReactNode; }
-interface ErrorBoundaryState { hasError: boolean; }
+// Haversine formula to calculate miles between two coordinates
+const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+  const R = 3958.8;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+  return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+};
 
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  constructor(props: ErrorBoundaryProps) {
-    super(props);
-    this.state = { hasError: false };
-  }
-  static getDerivedStateFromError(_error: Error): ErrorBoundaryState {
-    return { hasError: true };
-  }
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("App render error", error, errorInfo);
-  }
+class ErrorBoundary extends Component<{children: ReactNode}, {hasError: boolean}> {
+  constructor(props: any) { super(props); this.state = { hasError: false }; }
+  static getDerivedStateFromError() { return { hasError: true }; }
   render() {
-    if (this.state.hasError) {
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-          <div className="max-w-xl w-full bg-white rounded-lg shadow p-8 text-center">
-            <h2 className="text-2xl font-bold text-[#1E396C] mb-4">Something went wrong.</h2>
-            <p className="text-slate-600 mb-6">Please try reloading the page.</p>
-            <button 
-              onClick={() => window.location.reload()}
-              className="mt-6 bg-[#1E396C] text-white px-6 py-2 rounded font-medium hover:bg-blue-900"
-            >
-              Reload Application
-            </button>
-          </div>
-        </div>
-      );
-    }
+    if (this.state.hasError) return <div className="p-8 text-center"><h2 className="text-xl font-bold text-red-600">Something went wrong. Please refresh.</h2></div>;
     return this.props.children;
   }
 }
 
-// --- ICONS ---
 const Icons = {
-  Check: () => <svg className="w-5 h-5 text-green-700" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>,
-  Cross: () => <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>,
-  Help: () => <svg className="w-5 h-5 text-[#1E396C]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
-  MapPin: () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
+  Check: () => <svg className="w-5 h-5 text-green-700 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>,
+  Cross: () => <svg className="w-5 h-5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>,
+  Help: () => <svg className="w-5 h-5 text-[#1E396C] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+  MapPin: () => <svg className="w-4 h-4 mr-1 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
 };
 
-// --- COMPONENTS ---
 const StatusIndicator = ({ status, label }: { status: string; label: string }) => {
   if (status === 'Yes') return <div className="flex items-center"><Icons.Check /><span className="ml-2 text-sm">{label}</span></div>;
   if (status === 'No') return <div className="flex items-center line-through text-gray-500"><Icons.Cross /><span className="ml-2 text-sm">{label}</span></div>;
   return (
     <div className="flex items-start bg-blue-50/50 p-2 rounded-md">
       <div className="mt-0.5"><Icons.Help /></div>
-      <span className="ml-2 text-sm text-slate-700"><strong>{label}</strong> not specified. Contact to confirm.</span>
+      <span className="ml-2 text-sm text-slate-700"><strong>{label}</strong> not specified.</span>
     </div>
   );
 };
 
-const ResourceCard = ({ resource, isActive, onClick }: { resource: Resource; isActive: boolean; onClick: () => void }) => (
-  <div 
-    onClick={onClick}
-    className={`bg-white rounded-lg border-2 p-5 cursor-pointer transition-all hover:shadow-md ${isActive ? 'border-[#1E396C] shadow-md' : 'border-gray-200'}`}
-  >
-    <h3 className="text-xl font-bold text-[#1E396C]">{resource.name}</h3>
-    <p className="text-slate-600 flex items-center mt-1 text-sm"><Icons.MapPin /><span className="ml-1">{resource.address}</span></p>
-    
-    <div className="mt-4 flex flex-wrap gap-2">
-      {resource.services.map((s: string) => (
-        <span key={s} className="px-2 py-1 bg-gray-100 text-xs font-semibold text-slate-700 rounded uppercase tracking-wider">{s}</span>
-      ))}
-    </div>
-    
-    <div className="mt-4 space-y-2">
-      <p className="text-sm"><strong>Languages:</strong> {resource.languages.join(', ')}</p>
-      <div className="grid grid-cols-1 gap-2 pt-2 border-t border-gray-100">
-        <StatusIndicator status={resource.massHealth} label="MassHealth" />
-        <StatusIndicator status={resource.undocumented} label="Serves Regardless of Immigration Status" />
-      </div>
-    </div>
-  </div>
-);
-
-const EmptyState = ({ resetFilters }: { resetFilters: () => void }) => (
-  <div className="bg-white rounded-lg border-2 border-dashed border-gray-300 p-8 text-center">
-    <h3 className="text-xl font-bold text-[#1E396C] mb-2">No matching resources found</h3>
-    <p className="text-slate-600 mb-6">We couldn't find a provider matching every selected filter. Try broadening your search.</p>
-    <button onClick={resetFilters} className="bg-[#1E396C] text-white px-6 py-2 rounded font-medium hover:bg-blue-900">
-      Clear Filters
-    </button>
-  </div>
-);
-
-const MapPlaceholder = ({ resources, activeId, setActiveId }: { resources: Resource[]; activeId: string | null; setActiveId: (id: string | null) => void }) => {
-  const project = (lat: number, lng: number) => {
-    const latMin = 42.33, latMax = 42.38;
-    const lngMin = -71.08, lngMax = -71.03;
-    const y = 100 - ((lat - latMin) / (latMax - latMin)) * 100;
-    const x = ((lng - lngMin) / (lngMax - lngMin)) * 100;
-    return { top: `${y}%`, left: `${x}%` };
-  };
-
-  return (
-    <div className="bg-slate-200 w-full h-[400px] rounded-lg border-2 border-slate-300 relative overflow-hidden flex items-center justify-center">
-      <p className="absolute text-slate-500 font-medium z-0 text-center px-4">Interactive map prototype.<br/>(Will connect to Mapbox in production)</p>
-      {resources.map((res) => {
-        const pos = project(res.lat, res.lng);
-        const isActive = res.id === activeId;
-        return (
-          <div 
-            key={res.id}
-            onClick={() => setActiveId(res.id)}
-            className={`absolute w-6 h-6 rounded-full cursor-pointer transform -translate-x-1/2 -translate-y-1/2 transition-all z-10 ${isActive ? 'bg-[#D9272E] scale-125 border-2 border-white shadow-lg' : 'bg-[#1E396C] border-2 border-white'}`}
-            style={{ top: pos.top, left: pos.left }}
-          />
-        );
-      })}
-    </div>
-  );
-};
-
-// --- MAIN APP ---
 export default function Home() {
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [language, setLanguage] = useState<string>('');
-  const [insurance, setInsurance] = useState<string>('');
+  const [language, setLanguage] = useState('');
+  const [insurance, setInsurance] = useState('');
+  
+  // ZIP Search State
+  const [zipInput, setZipInput] = useState('');
+  const [radius, setRadius] = useState('5');
+  const [searchCenter, setSearchCenter] = useState<[number, number]>([42.3601, -71.0589]); // Defaults to Boston
+  const [isSearching, setIsSearching] = useState(false);
 
-  const filteredData = mockData.filter(res => {
-    if (language && !res.languages.includes(language)) return false;
+  const handleZipSearch = async () => {
+    if (!zipInput || zipInput.length < 5) return;
+    setIsSearching(true);
+    try {
+      // Uses OpenStreetMap's free geocoder
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?postalcode=${zipInput}&country=US&format=json`);
+      const data = await res.json();
+      if (data && data.length > 0) {
+        setSearchCenter([parseFloat(data[0].lat), parseFloat(data[0].lon)]);
+      } else {
+        alert("ZIP code not found. Showing all results.");
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    setIsSearching(false);
+  };
+
+  const filteredData = realData.filter(res => {
+    // 1. Language Filter
+    if (language && !res.languages.some(l => l.includes(language) || l.includes('Multiple'))) return false;
+    
+    // 2. Insurance Filter
     if (insurance === 'MassHealth' && res.massHealth === 'No') return false;
     if (insurance === 'Medicare' && res.medicare === 'No') return false;
     if (insurance === 'Commercial' && res.commercial === 'No') return false;
+    
+    // 3. Radius Filter
+    if (zipInput.length >= 5) {
+      const distance = getDistance(searchCenter[0], searchCenter[1], res.lat, res.lng);
+      if (distance > parseInt(radius)) return false;
+    }
     return true;
   });
 
   return (
     <ErrorBoundary>
-      <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
-        
-        {/* Header */}
+      <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-12">
         <header className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
           <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -227,44 +146,64 @@ export default function Home() {
           </div>
         </header>
 
-        {/* Crisis Banner */}
         <div className="bg-[#D9272E] text-white">
           <div className="max-w-7xl mx-auto px-4 py-3 text-sm flex flex-col sm:flex-row sm:items-center sm:justify-between font-medium">
             <p>If you are in immediate danger, call <strong>911</strong>.</p>
-            <p className="mt-1 sm:mt-0">For a mental health crisis, call or text <strong>988</strong> (Available 24/7 in English & Spanish).</p>
+            <p className="mt-1 sm:mt-0">For a mental health crisis, call or text <strong>988</strong> (Available 24/7).</p>
           </div>
         </div>
 
-        <main className="max-w-7xl mx-auto px-4 py-6 flex flex-col md:flex-row gap-6">
+        <main className="max-w-7xl mx-auto px-4 py-6 flex flex-col lg:flex-row gap-6">
           
           {/* Filters Sidebar */}
-          <aside className="w-full md:w-80 flex-shrink-0 space-y-6">
+          <aside className="w-full lg:w-80 flex-shrink-0 space-y-6">
             <div className="bg-white p-5 rounded-lg border border-gray-200 shadow-sm">
-              <h2 className="font-bold text-lg text-[#1E396C] mb-4 border-b pb-2">Filter Resources</h2>
+              <h2 className="font-bold text-lg text-[#1E396C] mb-4 border-b pb-2">Find Care</h2>
               
-              <div className="space-y-4">
+              <div className="space-y-5">
+                <div>
+                  <label className="block text-sm font-semibold mb-1 text-slate-700">Location</label>
+                  <div className="flex gap-2">
+                    <input 
+                      type="text" 
+                      placeholder="ZIP Code" 
+                      maxLength={5}
+                      value={zipInput}
+                      onChange={(e) => setZipInput(e.target.value.replace(/\D/g, ''))}
+                      className="w-2/3 border-gray-300 rounded-md p-2 bg-slate-50 border focus:ring-2 focus:ring-[#1E396C]"
+                    />
+                    <select 
+                      value={radius} 
+                      onChange={(e) => setRadius(e.target.value)}
+                      className="w-1/3 border-gray-300 rounded-md p-2 bg-slate-50 border focus:ring-2 focus:ring-[#1E396C] text-sm"
+                    >
+                      <option value="5">5 mi</option>
+                      <option value="10">10 mi</option>
+                      <option value="25">25 mi</option>
+                    </select>
+                  </div>
+                  <button 
+                    onClick={handleZipSearch}
+                    disabled={zipInput.length < 5 || isSearching}
+                    className="w-full mt-2 bg-[#1E396C] text-white text-sm font-medium py-2 rounded disabled:opacity-50"
+                  >
+                    {isSearching ? 'Locating...' : 'Update Map'}
+                  </button>
+                </div>
+
                 <div>
                   <label className="block text-sm font-semibold mb-1 text-slate-700">Language Supported</label>
-                  <select 
-                    value={language} 
-                    onChange={(e) => setLanguage(e.target.value)}
-                    className="w-full border-gray-300 rounded-md p-2 bg-slate-50 border focus:ring-2 focus:ring-[#1E396C]"
-                  >
+                  <select value={language} onChange={(e) => setLanguage(e.target.value)} className="w-full border-gray-300 rounded-md p-2 bg-slate-50 border focus:ring-2 focus:ring-[#1E396C]">
                     <option value="">Any Language</option>
                     <option value="Spanish">Spanish</option>
-                    <option value="Portuguese">Portuguese</option>
-                    <option value="Haitian Creole">Haitian Creole</option>
-                    <option value="Mandarin">Mandarin</option>
+                    <option value="Vietnamese">Vietnamese</option>
+                    <option value="Cambodian">Cambodian / Khmer</option>
                   </select>
                 </div>
 
                 <div>
                   <label className="block text-sm font-semibold mb-1 text-slate-700">Insurance Accepted</label>
-                  <select 
-                    value={insurance} 
-                    onChange={(e) => setInsurance(e.target.value)}
-                    className="w-full border-gray-300 rounded-md p-2 bg-slate-50 border focus:ring-2 focus:ring-[#1E396C]"
-                  >
+                  <select value={insurance} onChange={(e) => setInsurance(e.target.value)} className="w-full border-gray-300 rounded-md p-2 bg-slate-50 border focus:ring-2 focus:ring-[#1E396C]">
                     <option value="">Any Insurance</option>
                     <option value="MassHealth">MassHealth</option>
                     <option value="Medicare">Medicare</option>
@@ -275,9 +214,9 @@ export default function Home() {
             </div>
           </aside>
 
-          {/* Map & Results Area */}
+          {/* Map & Results */}
           <div className="flex-1 flex flex-col gap-6">
-            <MapPlaceholder resources={filteredData} activeId={activeId} setActiveId={setActiveId} />
+            <MapComponent resources={filteredData} activeId={activeId} setActiveId={setActiveId} center={searchCenter} />
             
             <div>
               <div className="flex justify-between items-end mb-4">
@@ -286,16 +225,33 @@ export default function Home() {
               </div>
               
               {filteredData.length === 0 ? (
-                <EmptyState resetFilters={() => { setLanguage(''); setInsurance(''); }} />
+                <div className="bg-white rounded-lg border-2 border-dashed border-gray-300 p-8 text-center">
+                  <h3 className="text-xl font-bold text-[#1E396C] mb-2">No matching resources found</h3>
+                  <button onClick={() => { setLanguage(''); setInsurance(''); setZipInput(''); }} className="bg-[#1E396C] text-white px-6 py-2 rounded font-medium mt-4">Clear Filters</button>
+                </div>
               ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                   {filteredData.map(res => (
-                    <ResourceCard 
+                    <div 
                       key={res.id} 
-                      resource={res} 
-                      isActive={activeId === res.id} 
-                      onClick={() => setActiveId(res.id)} 
-                    />
+                      onClick={() => setActiveId(res.id)}
+                      className={`bg-white rounded-lg border-2 p-5 cursor-pointer transition-all ${activeId === res.id ? 'border-[#1E396C] shadow-md ring-1 ring-[#1E396C]' : 'border-gray-200'}`}
+                    >
+                      <h3 className="text-lg font-bold text-[#1E396C]">{res.name}</h3>
+                      <p className="text-slate-600 flex items-start mt-1 text-sm"><Icons.MapPin /><span>{res.address}</span></p>
+                      
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {res.services.slice(0, 3).map(s => <span key={s} className="px-2 py-1 bg-gray-100 text-xs font-semibold text-slate-700 rounded">{s}</span>)}
+                      </div>
+                      
+                      <div className="mt-4 space-y-2 pt-3 border-t border-gray-100">
+                        <p className="text-sm"><strong>Languages:</strong> {res.languages.join(', ')}</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <StatusIndicator status={res.massHealth} label="MassHealth" />
+                          <StatusIndicator status={res.undocumented} label="Undocumented Eligible" />
+                        </div>
+                      </div>
+                    </div>
                   ))}
                 </div>
               )}
