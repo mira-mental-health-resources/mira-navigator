@@ -20,6 +20,12 @@ interface Resource {
   address: string;
   lat: number;
   lng: number;
+  phone?: string;
+  website?: string;
+  services: string[];
+  languages: string[];
+  massHealth: string;
+  undocumented: string;
 }
 
 interface MapProps {
@@ -46,8 +52,29 @@ export default function Map({ resources, activeId, setActiveId, center }: MapPro
             eventHandlers={{ click: () => setActiveId(res.id) }}
           >
             <Popup>
-              <strong>{res.name}</strong><br/>
-              <span className="text-sm text-gray-600">{res.address}</span>
+              <div className="min-w-[200px]">
+                <strong className="text-base text-[#1E396C] block mb-2">{res.name}</strong>
+                
+                <a href={`https://maps.google.com/?q=${encodeURIComponent(res.address)}`} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline block mb-1">
+                  📍 {res.address}
+                </a>
+                
+                {res.phone && (
+                  <a href={`tel:${res.phone}`} className="text-sm text-blue-600 hover:underline block mb-1">
+                    📞 {res.phone}
+                  </a>
+                )}
+                
+                {res.website && (
+                  <a href={res.website} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline block mb-2">
+                    🌐 Visit Website
+                  </a>
+                )}
+                
+                <div className="mt-2 text-xs text-gray-600 border-t pt-2">
+                  <strong>Languages:</strong> {res.languages.join(', ')}
+                </div>
+              </div>
             </Popup>
           </Marker>
         ))}

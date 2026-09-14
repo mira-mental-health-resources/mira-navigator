@@ -1,9 +1,8 @@
 "use client";
 
-import React, { useState, Component, ErrorInfo, ReactNode } from 'react';
+import React, { useState, Component, ReactNode } from 'react';
 import dynamic from 'next/dynamic';
 
-// Dynamically import the map to prevent Server-Side Rendering errors
 const MapComponent = dynamic(() => import('./components/Map'), { 
   ssr: false, 
   loading: () => <div className="bg-slate-200 w-full h-[400px] rounded-lg flex items-center justify-center font-medium text-slate-500">Loading Map...</div> 
@@ -11,45 +10,50 @@ const MapComponent = dynamic(() => import('./components/Map'), {
 
 interface Resource {
   id: string; name: string; address: string; lat: number; lng: number;
+  phone?: string; website?: string;
   services: string[]; languages: string[]; massHealth: string;
   medicare: string; commercial: string; undocumented: string; telehealth: string;
 }
 
-// Data extracted directly from Mental Health Project MIRA.xlsx
 const realData: Resource[] = [
   {
     id: "0", name: "Boston Medical Center", address: "85 East Newton St, 1st Floor, Boston, MA 02118",
     lat: 42.336, lng: -71.074, services: ["Individual Therapy", "Group Therapy", "Mobile Crisis"],
-    languages: ["Multiple (Interpreter services)"], massHealth: "Yes", medicare: "Unknown", commercial: "Yes", undocumented: "Unknown", telehealth: "Yes"
+    languages: ["Multiple (Interpreter services)"], massHealth: "Yes", medicare: "Unknown", commercial: "Yes", undocumented: "Unknown", telehealth: "Yes",
+    phone: "617-414-5470", website: "https://www.bmc.org/psychiatry"
   },
   {
     id: "1", name: "North Suffolk Community Services", address: "14 Porter St, East Boston, MA 02128",
     lat: 42.370, lng: -71.039, services: ["Medication-Assisted Treatment (MAT)", "Intensive Outpatient", "Peer Support"],
-    languages: ["Spanish", "Vietnamese", "Cambodian/Khmer"], massHealth: "Yes", medicare: "Yes", commercial: "Yes", undocumented: "Unknown", telehealth: "Yes"
+    languages: ["Spanish", "Vietnamese", "Cambodian/Khmer"], massHealth: "Yes", medicare: "Yes", commercial: "Yes", undocumented: "Unknown", telehealth: "Yes",
+    phone: "617-569-3189", website: "https://northsuffolk.org"
   },
   {
     id: "2", name: "North Suffolk Community Services", address: "265 Beach Street, Revere, MA 02151",
     lat: 42.408, lng: -70.995, services: ["Individual Therapy", "Group Therapy", "Psychiatric Medication Management"],
-    languages: ["Cambodian/Khmer"], massHealth: "Yes", medicare: "Yes", commercial: "Yes", undocumented: "Unknown", telehealth: "Yes"
+    languages: ["Cambodian/Khmer"], massHealth: "Yes", medicare: "Yes", commercial: "Yes", undocumented: "Unknown", telehealth: "Yes",
+    phone: "781-289-8200", website: "https://northsuffolk.org"
   },
   {
     id: "3", name: "Boston Medical Center (Crosstown)", address: "771 Albany St, Boston, MA 02118",
     lat: 42.334, lng: -71.071, services: ["Case Management", "Psychological Testing"],
-    languages: ["250+ languages via interpreter"], massHealth: "Yes", medicare: "Unknown", commercial: "Unknown", undocumented: "Yes", telehealth: "Yes"
+    languages: ["250+ languages via interpreter"], massHealth: "Yes", medicare: "Unknown", commercial: "Unknown", undocumented: "Yes", telehealth: "Yes",
+    phone: "617-414-5470", website: "https://www.bmc.org"
   },
   {
     id: "4", name: "Northeast Health Services (NEHS)", address: "1 Union St, 3rd Floor, Boston, MA 02180",
     lat: 42.361, lng: -71.056, services: ["Individual Therapy", "Same/next-day evaluation"],
-    languages: ["Unknown"], massHealth: "Yes", medicare: "Unknown", commercial: "Unknown", undocumented: "Unknown", telehealth: "Yes"
+    languages: ["Unknown"], massHealth: "Yes", medicare: "Unknown", commercial: "Unknown", undocumented: "Unknown", telehealth: "Yes",
+    phone: "888-294-0094", website: "https://northeasthealthservices.com"
   },
   {
     id: "5", name: "Northeast Health Services (NEHS)", address: "90 Everett Avenue, Suite 12, Chelsea, MA 02150",
     lat: 42.394, lng: -71.040, services: ["Individual Therapy", "Psychiatric Medication Management"],
-    languages: ["Unknown"], massHealth: "Yes", medicare: "Unknown", commercial: "Unknown", undocumented: "Unknown", telehealth: "Yes"
+    languages: ["Unknown"], massHealth: "Yes", medicare: "Unknown", commercial: "Unknown", undocumented: "Unknown", telehealth: "Yes",
+    phone: "888-294-0094", website: "https://northeasthealthservices.com"
   }
 ];
 
-// Haversine formula to calculate miles between two coordinates
 const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
   const R = 3958.8;
   const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -71,7 +75,9 @@ const Icons = {
   Check: () => <svg className="w-5 h-5 text-green-700 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>,
   Cross: () => <svg className="w-5 h-5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>,
   Help: () => <svg className="w-5 h-5 text-[#1E396C] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
-  MapPin: () => <svg className="w-4 h-4 mr-1 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
+  MapPin: () => <svg className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
+  Phone: () => <svg className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>,
+  Globe: () => <svg className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>,
 };
 
 const StatusIndicator = ({ status, label }: { status: string; label: string }) => {
@@ -90,17 +96,15 @@ export default function Home() {
   const [language, setLanguage] = useState('');
   const [insurance, setInsurance] = useState('');
   
-  // ZIP Search State
   const [zipInput, setZipInput] = useState('');
   const [radius, setRadius] = useState('5');
-  const [searchCenter, setSearchCenter] = useState<[number, number]>([42.3601, -71.0589]); // Defaults to Boston
+  const [searchCenter, setSearchCenter] = useState<[number, number]>([42.3601, -71.0589]);
   const [isSearching, setIsSearching] = useState(false);
 
   const handleZipSearch = async () => {
     if (!zipInput || zipInput.length < 5) return;
     setIsSearching(true);
     try {
-      // Uses OpenStreetMap's free geocoder
       const res = await fetch(`https://nominatim.openstreetmap.org/search?postalcode=${zipInput}&country=US&format=json`);
       const data = await res.json();
       if (data && data.length > 0) {
@@ -115,15 +119,10 @@ export default function Home() {
   };
 
   const filteredData = realData.filter(res => {
-    // 1. Language Filter
     if (language && !res.languages.some(l => l.includes(language) || l.includes('Multiple'))) return false;
-    
-    // 2. Insurance Filter
     if (insurance === 'MassHealth' && res.massHealth === 'No') return false;
     if (insurance === 'Medicare' && res.medicare === 'No') return false;
     if (insurance === 'Commercial' && res.commercial === 'No') return false;
-    
-    // 3. Radius Filter
     if (zipInput.length >= 5) {
       const distance = getDistance(searchCenter[0], searchCenter[1], res.lat, res.lng);
       if (distance > parseInt(radius)) return false;
@@ -154,8 +153,6 @@ export default function Home() {
         </div>
 
         <main className="max-w-7xl mx-auto px-4 py-6 flex flex-col lg:flex-row gap-6">
-          
-          {/* Filters Sidebar */}
           <aside className="w-full lg:w-80 flex-shrink-0 space-y-6">
             <div className="bg-white p-5 rounded-lg border border-gray-200 shadow-sm">
               <h2 className="font-bold text-lg text-[#1E396C] mb-4 border-b pb-2">Find Care</h2>
@@ -214,7 +211,6 @@ export default function Home() {
             </div>
           </aside>
 
-          {/* Map & Results */}
           <div className="flex-1 flex flex-col gap-6">
             <MapComponent resources={filteredData} activeId={activeId} setActiveId={setActiveId} center={searchCenter} />
             
@@ -238,9 +234,29 @@ export default function Home() {
                       className={`bg-white rounded-lg border-2 p-5 cursor-pointer transition-all ${activeId === res.id ? 'border-[#1E396C] shadow-md ring-1 ring-[#1E396C]' : 'border-gray-200'}`}
                     >
                       <h3 className="text-lg font-bold text-[#1E396C]">{res.name}</h3>
-                      <p className="text-slate-600 flex items-start mt-1 text-sm"><Icons.MapPin /><span>{res.address}</span></p>
                       
-                      <div className="mt-3 flex flex-wrap gap-2">
+                      <div className="mt-3 space-y-2">
+                        <a href={`https://maps.google.com/?q=${encodeURIComponent(res.address)}`} target="_blank" rel="noopener noreferrer" className="flex items-start text-sm text-blue-600 hover:underline hover:text-blue-800">
+                          <Icons.MapPin />
+                          <span>{res.address}</span>
+                        </a>
+                        
+                        {res.phone && (
+                          <a href={`tel:${res.phone}`} className="flex items-center text-sm text-blue-600 hover:underline hover:text-blue-800">
+                            <Icons.Phone />
+                            <span>{res.phone}</span>
+                          </a>
+                        )}
+                        
+                        {res.website && (
+                          <a href={res.website} target="_blank" rel="noopener noreferrer" className="flex items-center text-sm text-blue-600 hover:underline hover:text-blue-800">
+                            <Icons.Globe />
+                            <span>Visit Website</span>
+                          </a>
+                        )}
+                      </div>
+                      
+                      <div className="mt-4 flex flex-wrap gap-2">
                         {res.services.slice(0, 3).map(s => <span key={s} className="px-2 py-1 bg-gray-100 text-xs font-semibold text-slate-700 rounded">{s}</span>)}
                       </div>
                       
